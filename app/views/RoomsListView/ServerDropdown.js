@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import {
-	View, Text, Animated, Easing, TouchableWithoutFeedback, TouchableOpacity, FlatList, Image
+	View, Text, Animated, Easing, TouchableWithoutFeedback, TouchableOpacity, FlatList, Image, Alert
 } from 'react-native';
 import PropTypes from 'prop-types';
 import { connect } from 'react-redux';
@@ -18,6 +18,7 @@ import I18n from '../../i18n';
 import EventEmitter from '../../utils/events';
 import Check from '../../containers/Check';
 import database from '../../lib/database';
+import log from '../../utils/log';
 
 const ROW_HEIGHT = 68;
 const ANIMATION_DURATION = 200;
@@ -133,13 +134,68 @@ class ServerDropdown extends Component {
 		}
 	}
 
+	deleteServer = async(server) => {
+		try {
+			const serversDB = database.servers;
+			const serversCollection = serversDB.collections.get('servers');
+			await serversDB.action(async() => {
+				try {
+					const serverInfo = await serversCollection.find(server);
+					await serverInfo.markAsDeleted();
+					await serverInfo.destroyPermanently();
+				} catch (e) {
+					console.log(e);
+				}
+			});
+		} catch (e) {
+			console.log(e);
+		}
+	}
+
+	clickDeleteServer = (server) => {
+		Alert.alert(
+			'Cuidado!',
+			'Você tem certeza que quer deletar esse servidos?',
+			[
+				{
+					text: 'Sim',
+					onPress: () => {
+						// this.close();
+						this.deleteServer(server);
+					}
+				},
+				{
+					text: 'Cancelar',
+					onPress: () => this.close(),
+					style: 'cancel'
+				}
+			],
+			{ cancelable: true },
+		);
+	}
+
+	longPress = async(server) => {
+		const {
+			server: currentServer
+		} = this.props;
+
+		if (currentServer !== server) {
+			const userId = await RNUserDefaults.get(`${ RocketChat.TOKEN_KEY }-${ server }`);
+			if (!userId) {
+				this.clickDeleteServer(server);
+			} else {
+				this.clickDeleteServer(server);
+			}
+		}
+	}
+
 	renderSeparator = () => <View style={styles.serverSeparator} />;
 
 	renderServer = ({ item }) => {
 		const { server } = this.props;
 
 		return (
-			<Touch onPress={() => this.select(item.id)} style={styles.serverItem} testID={`rooms-list-header-server-${ item.id }`}>
+			<Touch onPress={() => this.select(item.id)} onLongPress={() => this.longPress(item)} style={styles.serverItem} testID={`rooms-list-header-server-${ item.id }`}>
 				<View style={styles.serverItemContainer}>
 					{item.iconURL
 						? (
